@@ -1,0 +1,76 @@
+# Compiled output
+/lib
+/dist
+/tmp
+/out-tsc
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# CDK asset staging directory
+.cdk.staging
+cdk.out/
+
+# IDEs and editors
+/.idea
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+*.sublime-workspace
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment variables
+.env
+.env.local
+.env.production
+
+# Logs
+logs
+*.log
+lerna-debug.log*
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage directory used by tools like istanbul
+coverage/
+*.lcov
+
+# nyc test coverage
+.nyc_output
+
+# AWS
+.aws/
+
+# Terraform
+*.tfstate
+*.tfstate.*
+
+# Secrets and credentials
+*.pem
+*.key
+*.crt
+credentials
+config
+
+# Temporary instruction files
+instruction.md
+
+# Temporary files and sensitive information
+tmp/
