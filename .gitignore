@@ -75,3 +75,6 @@ instruction.md
 
 # Temporary files and sensitive information
 tmp/
+
+# Local development repositories
+local/

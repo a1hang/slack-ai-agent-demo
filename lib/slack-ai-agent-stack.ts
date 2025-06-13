@@ -1,5 +1,6 @@
 import * as cdk from 'aws-cdk-lib';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as nodejs from 'aws-cdk-lib/aws-lambda-nodejs';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import { Construct } from 'constructs';
@@ -9,12 +10,15 @@ export class SlackAiAgentDemoStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
 
-    const lambdaFunction = new lambda.Function(this, 'SlackHandlerFunction', {
+    const lambdaFunction = new nodejs.NodejsFunction(this, 'SlackHandlerFunction', {
+      entry: path.join(__dirname, '../src/lambda/slack-handler.ts'),
       runtime: lambda.Runtime.NODEJS_22_X,
-      handler: 'slack-handler.handler',
-      code: lambda.Code.fromAsset(path.join(__dirname, '../lib')),
       timeout: cdk.Duration.seconds(30),
       memorySize: 256,
+      bundling: {
+        externalModules: ['aws-sdk'],
+        forceDockerBundling: false,
+      },
       environment: {
         SLACK_BOT_TOKEN: process.env.SLACK_BOT_TOKEN || '',
         SLACK_SIGNING_SECRET: process.env.SLACK_SIGNING_SECRET || '',
