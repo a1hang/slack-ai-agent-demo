@@ -12,6 +12,7 @@ export class SlackAiAgentDemoStack extends cdk.Stack {
 
     const lambdaFunction = new nodejs.NodejsFunction(this, 'SlackHandlerFunction', {
       entry: path.join(__dirname, '../src/lambda/slack-handler.ts'),
+      functionName: 'slack-ai-agent-demo-handler',
       runtime: lambda.Runtime.NODEJS_22_X,
       timeout: cdk.Duration.seconds(30),
       memorySize: 256,
