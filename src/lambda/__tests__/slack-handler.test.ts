@@ -1,6 +1,18 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult, Context } from 'aws-lambda';
 import { handler } from '../slack-handler';
 
+// Mock AWS SDK SSM client
+jest.mock('@aws-sdk/client-ssm', () => ({
+  SSMClient: jest.fn(() => ({
+    send: jest.fn().mockResolvedValue({
+      Parameter: {
+        Value: 'mock-value'
+      }
+    })
+  })),
+  GetParameterCommand: jest.fn()
+}));
+
 jest.mock('@slack/bolt', () => ({
   App: jest.fn().mockImplementation(() => ({
     message: jest.fn(),

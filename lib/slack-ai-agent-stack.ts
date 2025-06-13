@@ -26,8 +26,17 @@ export class SlackAiAgentDemoStack extends cdk.Stack {
         's3:GetObjectAttributes',
       ],
       resources: [
-        'arn:aws:s3:::slack-ai-agent-demo-bucket',
-        'arn:aws:s3:::slack-ai-agent-demo-bucket/*',
+        'arn:aws:s3:::*', // Dynamic bucket name from SSM
+        'arn:aws:s3:::*/*',
+      ],
+    }));
+
+    // Add SSM Parameter Store read permissions
+    lambdaRole.addToPolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: ['ssm:GetParameter'],
+      resources: [
+        `arn:aws:ssm:ap-northeast-1:794587662786:parameter/slack-ai-agent/*`,
       ],
     }));
 
@@ -42,10 +51,7 @@ export class SlackAiAgentDemoStack extends cdk.Stack {
         forceDockerBundling: false,
       },
       environment: {
-        SLACK_BOT_TOKEN: process.env.SLACK_BOT_TOKEN || '',
-        SLACK_SIGNING_SECRET: process.env.SLACK_SIGNING_SECRET || '',
         NODE_ENV: 'production',
-        S3_DEMO_BUCKET: 'slack-ai-agent-demo-bucket',
       },
       role: lambdaRole,
     });

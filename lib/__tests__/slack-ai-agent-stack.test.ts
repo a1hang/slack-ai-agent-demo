@@ -51,9 +51,7 @@ describe('SlackAiAgentDemoStack', () => {
     template.hasResourceProperties('AWS::Lambda::Function', {
       Environment: {
         Variables: {
-          SLACK_BOT_TOKEN: Match.anyValue(),
-          SLACK_SIGNING_SECRET: Match.anyValue(),
-          S3_DEMO_BUCKET: 'slack-ai-agent-demo-bucket',
+          NODE_ENV: 'production',
         },
       },
     });
@@ -99,10 +97,21 @@ describe('SlackAiAgentDemoStack', () => {
           {
             Effect: 'Allow',
             Action: ['s3:ListBucket', 's3:GetObjectAttributes'],
-            Resource: [
-              'arn:aws:s3:::slack-ai-agent-demo-bucket',
-              'arn:aws:s3:::slack-ai-agent-demo-bucket/*',
-            ],
+            Resource: ['arn:aws:s3:::*', 'arn:aws:s3:::*/*'],
+          },
+        ]),
+      },
+    });
+  });
+
+  it('should have SSM Parameter Store read permissions', () => {
+    template.hasResourceProperties('AWS::IAM::Policy', {
+      PolicyDocument: {
+        Statement: Match.arrayWith([
+          {
+            Effect: 'Allow',
+            Action: 'ssm:GetParameter',
+            Resource: 'arn:aws:ssm:ap-northeast-1:794587662786:parameter/slack-ai-agent/*',
           },
         ]),
       },
