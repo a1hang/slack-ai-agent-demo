@@ -21,8 +21,9 @@ describe('SlackAiAgentDemoStack', () => {
   it('should create a Lambda function', () => {
     template.hasResourceProperties('AWS::Lambda::Function', {
       Runtime: 'nodejs22.x',
-      Handler: 'slack-handler.handler',
+      Handler: 'index.handler', // NodejsFunction automatically sets this
       Timeout: 30,
+      FunctionName: 'slack-ai-agent-demo-handler',
     });
   });
 
@@ -52,6 +53,7 @@ describe('SlackAiAgentDemoStack', () => {
         Variables: {
           SLACK_BOT_TOKEN: Match.anyValue(),
           SLACK_SIGNING_SECRET: Match.anyValue(),
+          S3_DEMO_BUCKET: 'slack-ai-agent-demo-bucket',
         },
       },
     });
@@ -87,6 +89,23 @@ describe('SlackAiAgentDemoStack', () => {
           ],
         },
       ],
+    });
+  });
+
+  it('should have S3 permissions for demo bucket', () => {
+    template.hasResourceProperties('AWS::IAM::Policy', {
+      PolicyDocument: {
+        Statement: Match.arrayWith([
+          {
+            Effect: 'Allow',
+            Action: ['s3:ListBucket', 's3:GetObjectAttributes'],
+            Resource: [
+              'arn:aws:s3:::slack-ai-agent-demo-bucket',
+              'arn:aws:s3:::slack-ai-agent-demo-bucket/*',
+            ],
+          },
+        ]),
+      },
     });
   });
 });
