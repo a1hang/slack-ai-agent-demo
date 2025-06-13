@@ -1,8 +1,9 @@
 # Compiled output
-/lib
 /dist
-/tmp
 /out-tsc
+*.js
+*.d.ts
+!jest.config.js
 
 # Node
 node_modules/
