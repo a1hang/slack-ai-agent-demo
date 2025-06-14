@@ -96,7 +96,7 @@ describe('SlackAiAgentDemoStack', () => {
         Statement: Match.arrayWith([
           {
             Effect: 'Allow',
-            Action: ['s3:ListBucket', 's3:GetObjectAttributes'],
+            Action: ['s3:ListBucket', 's3:GetObjectAttributes', 's3:GetObject'],
             Resource: ['arn:aws:s3:::*', 'arn:aws:s3:::*/*'],
           },
         ]),

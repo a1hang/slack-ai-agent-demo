@@ -15,7 +15,7 @@ jest.mock('@aws-sdk/client-ssm', () => ({
 
 jest.mock('@slack/bolt', () => ({
   App: jest.fn().mockImplementation(() => ({
-    message: jest.fn(),
+    event: jest.fn(),
     start: jest.fn(),
     receiver: {
       toHandler: jest.fn().mockReturnValue(async (event: any, context: any) => ({
@@ -47,6 +47,14 @@ jest.mock('@slack/bolt', () => ({
         'Content-Type': 'application/json',
       },
     })),
+  })),
+}));
+
+jest.mock('@slack/web-api', () => ({
+  WebClient: jest.fn().mockImplementation(() => ({
+    chat: {
+      update: jest.fn().mockResolvedValue({ ok: true }),
+    },
   })),
 }));
 
