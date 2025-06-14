@@ -68,11 +68,11 @@ async function getApp() {
   });
 
   // Register message handlers
-  app.message('hello', async ({ message, say }) => {
+  app.message('hello', async ({ say }) => {
     await say('Hello, World!');
   });
 
-  // S3 list objects command
+  // S3 list objects command with UX improvements
   app.message('list-s3', async ({ message, say }) => {
     try {
       const config = await getSlackConfig();
@@ -84,25 +84,91 @@ async function getApp() {
       const response = await s3Client.send(command);
       
       if (!response.Contents || response.Contents.length === 0) {
-        await say('S3バケットにオブジェクトが見つかりませんでした。');
+        await say({
+          text: 'S3バケットにオブジェクトが見つかりませんでした。',
+          blocks: [{
+            type: "section",
+            text: { 
+              type: "mrkdwn", 
+              text: "📁 S3バケットにオブジェクトが見つかりませんでした。" 
+            }
+          }]
+        });
         return;
       }
       
-      const objectList = response.Contents.map(obj => {
+      // Initial response: Summary only
+      await say({
+        text: `S3に${response.Contents.length}件のファイルがあります`,
+        blocks: [
+          {
+            type: "section",
+            text: { 
+              type: "mrkdwn", 
+              text: `📁 S3に*${response.Contents.length}件*のファイルがあります` 
+            }
+          },
+          {
+            type: "context",
+            elements: [{
+              type: "mrkdwn",
+              text: "詳細はスレッドで表示されます 👇"
+            }]
+          }
+        ]
+      });
+      
+      // Thread response: Detailed list
+      const objectBlocks = response.Contents.map(obj => {
         const size = obj.Size ? `${(obj.Size / 1024).toFixed(1)}KB` : '不明';
         const lastModified = obj.LastModified ? obj.LastModified.toISOString().slice(0, 19).replace('T', ' ') : '不明';
-        return `• ${obj.Key} (${size}, ${lastModified})`;
-      }).join('\n');
+        return {
+          type: "section",
+          text: { 
+            type: "mrkdwn", 
+            text: `\`${obj.Key}\` (${size}) - ${lastModified}` 
+          }
+        };
+      });
       
-      await say(`📦 S3バケットのオブジェクト一覧:\n\n${objectList}\n\n💡 ダウンロードURLを取得するには \`s3-url <ファイル名>\` を使用してください。`);
+      await say({
+        text: "ファイル一覧:",
+        thread_ts: message.ts,
+        blocks: [
+          {
+            type: "section",
+            text: { 
+              type: "mrkdwn", 
+              text: "*📂 ファイル一覧*" 
+            }
+          },
+          ...objectBlocks,
+          {
+            type: "context",
+            elements: [{
+              type: "mrkdwn",
+              text: "💡 ダウンロードURLを取得するには `s3-url <ファイル名>` を使用してください。"
+            }]
+          }
+        ]
+      });
     } catch (error) {
       console.error('S3 list error:', error);
-      await say('❌ S3オブジェクトの一覧取得中にエラーが発生しました。');
+      await say({
+        text: 'S3オブジェクトの一覧取得中にエラーが発生しました。',
+        blocks: [{
+          type: "section",
+          text: { 
+            type: "mrkdwn", 
+            text: "❌ S3オブジェクトの一覧取得中にエラーが発生しました。" 
+          }
+        }]
+      });
     }
   });
 
-  // S3 presigned URL command
-  app.message(/^s3-url\s+(.+)/, async ({ message, say, context }) => {
+  // S3 presigned URL command with UX improvements
+  app.message(/^s3-url\s+(.+)/, async ({ say, context }) => {
     try {
       const config = await getSlackConfig();
       const objectKey = context.matches[1].trim();
@@ -114,10 +180,45 @@ async function getApp() {
       
       const signedUrl = await getSignedUrl(s3Client, command, { expiresIn: 900 }); // 15 minutes
       
-      await say(`🔗 ダウンロードURL（15分間有効）:\n\n\`${objectKey}\`\n${signedUrl}\n\n⚠️ このURLは15分後に無効になります。`);
+      await say({
+        text: `${objectKey} のダウンロードリンクを生成しました`,
+        blocks: [
+          {
+            type: "section",
+            text: { 
+              type: "mrkdwn", 
+              text: `✅ *${objectKey}* のダウンロードリンクを生成しました（15分間有効）` 
+            }
+          },
+          {
+            type: "section",
+            text: { 
+              type: "mrkdwn", 
+              text: `<${signedUrl}|📁 ダウンロード>` 
+            }
+          },
+          {
+            type: "context",
+            elements: [{
+              type: "mrkdwn",
+              text: "⚠️ このURLは15分後に無効になります。"
+            }]
+          }
+        ]
+      });
     } catch (error) {
       console.error('S3 presigned URL error:', error);
-      await say(`❌ ファイル \`${context.matches[1].trim()}\` のダウンロードURL生成中にエラーが発生しました。ファイル名を確認してください。`);
+      const objectKey = context.matches[1].trim();
+      await say({
+        text: `ファイル ${objectKey} のダウンロードURL生成中にエラーが発生しました`,
+        blocks: [{
+          type: "section",
+          text: { 
+            type: "mrkdwn", 
+            text: `❌ ファイル \`${objectKey}\` のダウンロードURL生成中にエラーが発生しました。ファイル名を確認してください。` 
+          }
+        }]
+      });
     }
   });
 

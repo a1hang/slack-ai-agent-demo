@@ -20,7 +20,13 @@ jest.mock('@slack/bolt', () => ({
     receiver: {
       toHandler: jest.fn().mockReturnValue(async (event: any, context: any) => ({
         statusCode: 200,
-        body: JSON.stringify({ message: 'Hello, World!' }),
+        body: JSON.stringify({ 
+          message: 'Hello, World!',
+          blocks: [{
+            type: "section",
+            text: { type: "mrkdwn", text: "Hello, World!" }
+          }]
+        }),
         headers: {
           'Content-Type': 'application/json',
         },
@@ -30,7 +36,13 @@ jest.mock('@slack/bolt', () => ({
   AwsLambdaReceiver: jest.fn().mockImplementation(() => ({
     toHandler: jest.fn().mockReturnValue(async (event: any, context: any) => ({
       statusCode: 200,
-      body: JSON.stringify({ message: 'Hello, World!' }),
+      body: JSON.stringify({ 
+        message: 'Hello, World!',
+        blocks: [{
+          type: "section",
+          text: { type: "mrkdwn", text: "Hello, World!" }
+        }]
+      }),
       headers: {
         'Content-Type': 'application/json',
       },
@@ -115,6 +127,8 @@ describe('Slack Handler', () => {
     
     const body = JSON.parse(result.body);
     expect(body.message).toBe('Hello, World!');
+    expect(body.blocks).toBeDefined();
+    expect(body.blocks[0].type).toBe('section');
   });
 
   it('should handle non-hello messages gracefully', async () => {
