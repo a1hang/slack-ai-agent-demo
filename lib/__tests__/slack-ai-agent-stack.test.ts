@@ -111,7 +111,7 @@ describe('SlackAiAgentDemoStack', () => {
           {
             Effect: 'Allow',
             Action: ['ssm:GetParameter', 'ssm:GetParameters'],
-            Resource: 'arn:aws:ssm:ap-northeast-1:123456789012:parameter/slack-ai-agent-demo/*',
+            Resource: 'arn:aws:ssm:ap-northeast-1:123456789012:parameter/slack-ai-agent/*',
           },
         ]),
       },

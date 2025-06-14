@@ -36,7 +36,7 @@ export class SlackAiAgentDemoStack extends cdk.Stack {
       effect: iam.Effect.ALLOW,
       actions: ['ssm:GetParameter', 'ssm:GetParameters'],
       resources: [
-        `arn:aws:ssm:${this.region}:${this.account}:parameter/slack-ai-agent-demo/*`,
+        `arn:aws:ssm:${this.region}:${this.account}:parameter/slack-ai-agent/*`,
       ],
     }));
 
