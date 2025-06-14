@@ -3,58 +3,60 @@ import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as nodejs from 'aws-cdk-lib/aws-lambda-nodejs';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as iam from 'aws-cdk-lib/aws-iam';
+import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import { Construct } from 'constructs';
+import { Fn } from 'aws-cdk-lib';
 import * as path from 'path';
 
 export class SlackAiAgentDemoStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
 
-    // Create IAM role with S3 permissions
-    const lambdaRole = new iam.Role(this, 'SlackHandlerRole', {
-      assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
-      managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole'),
-      ],
+    // Import existing VPC and components from Bedrock Knowledge Base infrastructure
+    const vpcId = Fn.importValue('slack-ai-agent-demo-bedrock-kb-VpcId');
+    const privateSubnetIds = Fn.importValue('slack-ai-agent-demo-bedrock-kb-PrivateSubnets').split(',');
+    const lambdaSecurityGroupId = Fn.importValue('slack-ai-agent-demo-bedrock-kb-LambdaSecurityGroup');
+    const lambdaRoleArn = Fn.importValue('slack-ai-agent-demo-bedrock-kb-LambdaRole');
+
+    // VPC reference
+    const vpc = ec2.Vpc.fromVpcAttributes(this, 'ExistingVpc', {
+      vpcId: vpcId,
+      availabilityZones: ['ap-northeast-1a', 'ap-northeast-1c'],
+      privateSubnetIds: privateSubnetIds,
     });
 
-    // Add S3 permissions for demo bucket operations
-    lambdaRole.addToPolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: [
-        's3:ListBucket',
-        's3:GetObjectAttributes',
-        's3:GetObject', // Added for presigned URL generation
-      ],
-      resources: [
-        'arn:aws:s3:::*', // Dynamic bucket name from SSM
-        'arn:aws:s3:::*/*',
-      ],
-    }));
+    // Existing security group reference
+    const lambdaSecurityGroup = ec2.SecurityGroup.fromSecurityGroupId(
+      this, 'ExistingLambdaSecurityGroup', lambdaSecurityGroupId
+    );
 
-    // Add SSM Parameter Store read permissions
-    lambdaRole.addToPolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: ['ssm:GetParameter', 'ssm:GetParameters'],
-      resources: [
-        `arn:aws:ssm:${this.region}:${this.account}:parameter/slack-ai-agent/*`,
-      ],
-    }));
+    // Existing IAM role reference
+    const lambdaRole = iam.Role.fromRoleArn(
+      this, 'ExistingLambdaRole', lambdaRoleArn
+    );
 
+    // Note: S3, SSM, and Bedrock permissions are already included in the existing role from infrastructure stack
+
+    // Lambda function with VPC placement
     const lambdaFunction = new nodejs.NodejsFunction(this, 'SlackHandlerFunction', {
       entry: path.join(__dirname, '../src/lambda/slack-handler.ts'),
       functionName: 'slack-ai-agent-demo-handler',
       runtime: lambda.Runtime.NODEJS_22_X,
-      timeout: cdk.Duration.seconds(30),
-      memorySize: 256,
+      timeout: cdk.Duration.seconds(60),
+      memorySize: 512,
       bundling: {
         externalModules: [],
-        forceDockerBundling: false,  // ローカルバンドリング強制
+        forceDockerBundling: false,
       },
       environment: {
         NODE_ENV: 'production',
       },
       role: lambdaRole,
+      vpc: vpc,
+      vpcSubnets: {
+        subnets: vpc.privateSubnets,
+      },
+      securityGroups: [lambdaSecurityGroup],
     });
 
     const api = new apigateway.RestApi(this, 'SlackAiAgentApi', {

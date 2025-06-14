@@ -13,6 +13,18 @@ jest.mock('@aws-sdk/client-ssm', () => ({
   GetParameterCommand: jest.fn()
 }));
 
+// Mock AWS SDK Bedrock Agent Runtime client
+jest.mock('@aws-sdk/client-bedrock-agent-runtime', () => ({
+  BedrockAgentRuntimeClient: jest.fn(() => ({
+    send: jest.fn().mockResolvedValue({
+      output: {
+        text: 'Mock response from Bedrock Knowledge Base'
+      }
+    })
+  })),
+  RetrieveAndGenerateCommand: jest.fn()
+}));
+
 jest.mock('@slack/bolt', () => ({
   App: jest.fn().mockImplementation(() => ({
     event: jest.fn(),
@@ -145,15 +157,36 @@ describe('Slack Handler', () => {
       body: JSON.stringify({
         type: 'event_callback',
         event: {
-          type: 'message',
-          text: 'goodbye',
+          type: 'app_mention',
+          text: '@Slack AI Agent goodbye',
           channel: 'C123456',
           user: 'U123456',
+          ts: '1234567890.123456',
         },
       }),
     };
 
     const result = await handler(eventWithDifferentMessage, mockContext) as APIGatewayProxyResult;
+    
+    expect(result.statusCode).toBe(200);
+  });
+
+  it('should handle ask command with Bedrock Knowledge Base', async () => {
+    const eventWithAskCommand = {
+      ...mockEvent,
+      body: JSON.stringify({
+        type: 'event_callback',
+        event: {
+          type: 'app_mention',
+          text: '@Slack AI Agent ask What is project management?',
+          channel: 'C123456',
+          user: 'U123456',
+          ts: '1234567890.123456',
+        },
+      }),
+    };
+
+    const result = await handler(eventWithAskCommand, mockContext) as APIGatewayProxyResult;
     
     expect(result.statusCode).toBe(200);
   });

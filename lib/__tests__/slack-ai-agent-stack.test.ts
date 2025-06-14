@@ -9,6 +9,24 @@ describe('SlackAiAgentDemoStack', () => {
 
   beforeEach(() => {
     app = new cdk.App();
+    
+    // Mock the ImportValue functions for testing
+    const originalImportValue = cdk.Fn.importValue;
+    cdk.Fn.importValue = jest.fn().mockImplementation((name: string) => {
+      switch (name) {
+        case 'slack-ai-agent-demo-bedrock-kb-VpcId':
+          return 'vpc-12345678';
+        case 'slack-ai-agent-demo-bedrock-kb-PrivateSubnets':
+          return 'subnet-1234,subnet-5678';
+        case 'slack-ai-agent-demo-bedrock-kb-LambdaSecurityGroup':
+          return 'sg-12345678';
+        case 'slack-ai-agent-demo-bedrock-kb-LambdaRole':
+          return 'arn:aws:iam::123456789012:role/BedrockLambdaRole';
+        default:
+          return originalImportValue(name);
+      }
+    });
+    
     stack = new SlackAiAgentDemoStack(app, 'TestSlackAiAgentDemoStack', {
       env: {
         account: '123456789012',
@@ -22,7 +40,8 @@ describe('SlackAiAgentDemoStack', () => {
     template.hasResourceProperties('AWS::Lambda::Function', {
       Runtime: 'nodejs22.x',
       Handler: 'index.handler', // NodejsFunction automatically sets this
-      Timeout: 30,
+      Timeout: 60,
+      MemorySize: 512,
       FunctionName: 'slack-ai-agent-demo-handler',
     });
   });
@@ -57,64 +76,29 @@ describe('SlackAiAgentDemoStack', () => {
     });
   });
 
-  it('should create IAM role with necessary permissions', () => {
-    template.hasResourceProperties('AWS::IAM::Role', {
-      AssumeRolePolicyDocument: {
-        Statement: [
-          {
-            Effect: 'Allow',
-            Principal: {
-              Service: 'lambda.amazonaws.com',
-            },
-            Action: 'sts:AssumeRole',
-          },
-        ],
+  it('should only create CloudWatch role for API Gateway', () => {
+    // Should have one IAM Role for API Gateway CloudWatch logs
+    const roles = template.findResources('AWS::IAM::Role');
+    expect(Object.keys(roles)).toHaveLength(1);
+    expect(Object.keys(roles)[0]).toContain('CloudWatchRole');
+    
+    // Should not have IAM Policy creation since permissions are in existing role
+    const policies = template.findResources('AWS::IAM::Policy');
+    expect(Object.keys(policies)).toHaveLength(0);
+  });
+
+  it('should reference existing VPC configuration', () => {
+    template.hasResourceProperties('AWS::Lambda::Function', {
+      VpcConfig: {
+        SecurityGroupIds: ['sg-12345678'],
+        SubnetIds: ['subnet-1234', 'subnet-5678'],
       },
     });
   });
 
-  it('should attach basic Lambda execution policy', () => {
-    template.hasResourceProperties('AWS::IAM::Role', {
-      ManagedPolicyArns: [
-        {
-          'Fn::Join': [
-            '',
-            [
-              'arn:',
-              { Ref: 'AWS::Partition' },
-              ':iam::aws:policy/service-role/AWSLambdaBasicExecutionRole',
-            ],
-          ],
-        },
-      ],
-    });
-  });
-
-  it('should have S3 permissions for demo bucket', () => {
-    template.hasResourceProperties('AWS::IAM::Policy', {
-      PolicyDocument: {
-        Statement: Match.arrayWith([
-          {
-            Effect: 'Allow',
-            Action: ['s3:ListBucket', 's3:GetObjectAttributes', 's3:GetObject'],
-            Resource: ['arn:aws:s3:::*', 'arn:aws:s3:::*/*'],
-          },
-        ]),
-      },
-    });
-  });
-
-  it('should have SSM Parameter Store read permissions', () => {
-    template.hasResourceProperties('AWS::IAM::Policy', {
-      PolicyDocument: {
-        Statement: Match.arrayWith([
-          {
-            Effect: 'Allow',
-            Action: ['ssm:GetParameter', 'ssm:GetParameters'],
-            Resource: 'arn:aws:ssm:ap-northeast-1:123456789012:parameter/slack-ai-agent/*',
-          },
-        ]),
-      },
+  it('should use existing IAM role from infrastructure stack', () => {
+    template.hasResourceProperties('AWS::Lambda::Function', {
+      Role: 'arn:aws:iam::123456789012:role/BedrockLambdaRole',
     });
   });
 });
