@@ -24,6 +24,7 @@ export class SlackAiAgentDemoStack extends cdk.Stack {
       actions: [
         's3:ListBucket',
         's3:GetObjectAttributes',
+        's3:GetObject', // Added for presigned URL generation
       ],
       resources: [
         'arn:aws:s3:::*', // Dynamic bucket name from SSM
@@ -47,8 +48,8 @@ export class SlackAiAgentDemoStack extends cdk.Stack {
       timeout: cdk.Duration.seconds(30),
       memorySize: 256,
       bundling: {
-        externalModules: ['aws-sdk'],
-        forceDockerBundling: false,
+        externalModules: [],
+        forceDockerBundling: false,  // ローカルバンドリング強制
       },
       environment: {
         NODE_ENV: 'production',
