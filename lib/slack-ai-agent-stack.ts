@@ -10,6 +10,36 @@ export class SlackAiAgentDemoStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
 
+    // Create IAM role with S3 permissions
+    const lambdaRole = new iam.Role(this, 'SlackHandlerRole', {
+      assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
+      managedPolicies: [
+        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole'),
+      ],
+    });
+
+    // Add S3 permissions for demo bucket operations
+    lambdaRole.addToPolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: [
+        's3:ListBucket',
+        's3:GetObjectAttributes',
+      ],
+      resources: [
+        'arn:aws:s3:::*', // Dynamic bucket name from SSM
+        'arn:aws:s3:::*/*',
+      ],
+    }));
+
+    // Add SSM Parameter Store read permissions
+    lambdaRole.addToPolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: ['ssm:GetParameter', 'ssm:GetParameters'],
+      resources: [
+        `arn:aws:ssm:${this.region}:${this.account}:parameter/slack-ai-agent/*`,
+      ],
+    }));
+
     const lambdaFunction = new nodejs.NodejsFunction(this, 'SlackHandlerFunction', {
       entry: path.join(__dirname, '../src/lambda/slack-handler.ts'),
       functionName: 'slack-ai-agent-demo-handler',
@@ -21,16 +51,9 @@ export class SlackAiAgentDemoStack extends cdk.Stack {
         forceDockerBundling: false,
       },
       environment: {
-        SLACK_BOT_TOKEN: process.env.SLACK_BOT_TOKEN || '',
-        SLACK_SIGNING_SECRET: process.env.SLACK_SIGNING_SECRET || '',
         NODE_ENV: 'production',
       },
-      role: new iam.Role(this, 'SlackHandlerRole', {
-        assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
-        managedPolicies: [
-          iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole'),
-        ],
-      }),
+      role: lambdaRole,
     });
 
     const api = new apigateway.RestApi(this, 'SlackAiAgentApi', {

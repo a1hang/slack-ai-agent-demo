@@ -21,8 +21,9 @@ describe('SlackAiAgentDemoStack', () => {
   it('should create a Lambda function', () => {
     template.hasResourceProperties('AWS::Lambda::Function', {
       Runtime: 'nodejs22.x',
-      Handler: 'slack-handler.handler',
+      Handler: 'index.handler', // NodejsFunction automatically sets this
       Timeout: 30,
+      FunctionName: 'slack-ai-agent-demo-handler',
     });
   });
 
@@ -50,8 +51,7 @@ describe('SlackAiAgentDemoStack', () => {
     template.hasResourceProperties('AWS::Lambda::Function', {
       Environment: {
         Variables: {
-          SLACK_BOT_TOKEN: Match.anyValue(),
-          SLACK_SIGNING_SECRET: Match.anyValue(),
+          NODE_ENV: 'production',
         },
       },
     });
@@ -87,6 +87,34 @@ describe('SlackAiAgentDemoStack', () => {
           ],
         },
       ],
+    });
+  });
+
+  it('should have S3 permissions for demo bucket', () => {
+    template.hasResourceProperties('AWS::IAM::Policy', {
+      PolicyDocument: {
+        Statement: Match.arrayWith([
+          {
+            Effect: 'Allow',
+            Action: ['s3:ListBucket', 's3:GetObjectAttributes'],
+            Resource: ['arn:aws:s3:::*', 'arn:aws:s3:::*/*'],
+          },
+        ]),
+      },
+    });
+  });
+
+  it('should have SSM Parameter Store read permissions', () => {
+    template.hasResourceProperties('AWS::IAM::Policy', {
+      PolicyDocument: {
+        Statement: Match.arrayWith([
+          {
+            Effect: 'Allow',
+            Action: ['ssm:GetParameter', 'ssm:GetParameters'],
+            Resource: 'arn:aws:ssm:ap-northeast-1:123456789012:parameter/slack-ai-agent/*',
+          },
+        ]),
+      },
     });
   });
 });

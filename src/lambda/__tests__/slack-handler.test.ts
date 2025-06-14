@@ -1,6 +1,18 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult, Context } from 'aws-lambda';
 import { handler } from '../slack-handler';
 
+// Mock AWS SDK SSM client
+jest.mock('@aws-sdk/client-ssm', () => ({
+  SSMClient: jest.fn(() => ({
+    send: jest.fn().mockResolvedValue({
+      Parameter: {
+        Value: 'mock-value'
+      }
+    })
+  })),
+  GetParameterCommand: jest.fn()
+}));
+
 jest.mock('@slack/bolt', () => ({
   App: jest.fn().mockImplementation(() => ({
     message: jest.fn(),
@@ -8,7 +20,13 @@ jest.mock('@slack/bolt', () => ({
     receiver: {
       toHandler: jest.fn().mockReturnValue(async (event: any, context: any) => ({
         statusCode: 200,
-        body: JSON.stringify({ message: 'Hello, World!' }),
+        body: JSON.stringify({ 
+          message: 'Hello, World!',
+          blocks: [{
+            type: "section",
+            text: { type: "mrkdwn", text: "Hello, World!" }
+          }]
+        }),
         headers: {
           'Content-Type': 'application/json',
         },
@@ -18,7 +36,13 @@ jest.mock('@slack/bolt', () => ({
   AwsLambdaReceiver: jest.fn().mockImplementation(() => ({
     toHandler: jest.fn().mockReturnValue(async (event: any, context: any) => ({
       statusCode: 200,
-      body: JSON.stringify({ message: 'Hello, World!' }),
+      body: JSON.stringify({ 
+        message: 'Hello, World!',
+        blocks: [{
+          type: "section",
+          text: { type: "mrkdwn", text: "Hello, World!" }
+        }]
+      }),
       headers: {
         'Content-Type': 'application/json',
       },
@@ -103,6 +127,8 @@ describe('Slack Handler', () => {
     
     const body = JSON.parse(result.body);
     expect(body.message).toBe('Hello, World!');
+    expect(body.blocks).toBeDefined();
+    expect(body.blocks[0].type).toBe('section');
   });
 
   it('should handle non-hello messages gracefully', async () => {
