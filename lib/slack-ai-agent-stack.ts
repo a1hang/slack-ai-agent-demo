@@ -34,9 +34,9 @@ export class SlackAiAgentDemoStack extends cdk.Stack {
     // Add SSM Parameter Store read permissions
     lambdaRole.addToPolicy(new iam.PolicyStatement({
       effect: iam.Effect.ALLOW,
-      actions: ['ssm:GetParameter'],
+      actions: ['ssm:GetParameter', 'ssm:GetParameters'],
       resources: [
-        `arn:aws:ssm:ap-northeast-1:794587662786:parameter/slack-ai-agent/*`,
+        `arn:aws:ssm:${this.region}:${this.account}:parameter/slack-ai-agent-demo/*`,
       ],
     }));
 

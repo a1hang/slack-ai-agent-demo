@@ -22,15 +22,15 @@ async function getSlackConfig() {
   try {
     const [botToken, signingSecret, s3Bucket] = await Promise.all([
       ssmClient.send(new GetParameterCommand({
-        Name: '/slack-ai-agent/bot-token',
+        Name: '/slack-ai-agent-demo/production/bot-token',
         WithDecryption: true,
       })),
       ssmClient.send(new GetParameterCommand({
-        Name: '/slack-ai-agent/signing-secret',
+        Name: '/slack-ai-agent-demo/production/signing-secret',
         WithDecryption: true,
       })),
       ssmClient.send(new GetParameterCommand({
-        Name: '/slack-ai-agent/s3-bucket',
+        Name: '/slack-ai-agent-demo/production/s3-bucket',
       })),
     ]);
 

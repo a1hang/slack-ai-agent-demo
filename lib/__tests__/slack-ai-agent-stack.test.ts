@@ -110,8 +110,8 @@ describe('SlackAiAgentDemoStack', () => {
         Statement: Match.arrayWith([
           {
             Effect: 'Allow',
-            Action: 'ssm:GetParameter',
-            Resource: 'arn:aws:ssm:ap-northeast-1:794587662786:parameter/slack-ai-agent/*',
+            Action: ['ssm:GetParameter', 'ssm:GetParameters'],
+            Resource: 'arn:aws:ssm:ap-northeast-1:123456789012:parameter/slack-ai-agent-demo/*',
           },
         ]),
       },
