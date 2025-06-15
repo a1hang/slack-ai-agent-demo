@@ -18,12 +18,18 @@ export class SlackAiAgentDemoStack extends cdk.Stack {
     const lambdaSecurityGroupId = Fn.importValue('slack-ai-agent-demo-base-LambdaSecurityGroup');
     const lambdaRoleArn = Fn.importValue('slack-ai-agent-demo-application-LambdaRole');
 
-    // VPC reference
-    const vpc = ec2.Vpc.fromVpcAttributes(this, 'ExistingVpc', {
+    // VPC reference - Import without subnet validation
+    const vpc = ec2.Vpc.fromLookup(this, 'ExistingVpc', {
       vpcId: vpcId,
-      availabilityZones: ['ap-northeast-1a', 'ap-northeast-1c'],
-      privateSubnetIds: privateSubnetIds,
     });
+
+    // Manual subnet import
+    const privateSubnet1 = ec2.Subnet.fromSubnetId(this, 'PrivateSubnet1', 
+      Fn.select(0, privateSubnetIds)
+    );
+    const privateSubnet2 = ec2.Subnet.fromSubnetId(this, 'PrivateSubnet2', 
+      Fn.select(1, privateSubnetIds)
+    );
 
     // Existing security group reference
     const lambdaSecurityGroup = ec2.SecurityGroup.fromSecurityGroupId(
@@ -54,7 +60,7 @@ export class SlackAiAgentDemoStack extends cdk.Stack {
       role: lambdaRole,
       vpc: vpc,
       vpcSubnets: {
-        subnets: vpc.privateSubnets,
+        subnets: [privateSubnet1, privateSubnet2],
       },
       securityGroups: [lambdaSecurityGroup],
     });

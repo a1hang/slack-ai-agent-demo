@@ -8,7 +8,24 @@ describe('SlackAiAgentDemoStack', () => {
   let template: Template;
 
   beforeEach(() => {
-    app = new cdk.App();
+    app = new cdk.App({
+      context: {
+        'vpc-provider:account=123456789012:filter.vpc-id=vpc-12345678:region=ap-northeast-1:returnAsymmetricSubnets=true': {
+          vpcId: 'vpc-12345678',
+          availabilityZones: ['ap-northeast-1a', 'ap-northeast-1c'],
+          subnetGroups: [
+            {
+              name: 'Private',
+              type: 'Private',
+              subnets: [
+                { subnetId: 'subnet-1234', availabilityZone: 'ap-northeast-1a' },
+                { subnetId: 'subnet-5678', availabilityZone: 'ap-northeast-1c' }
+              ]
+            }
+          ]
+        }
+      }
+    });
     
     // Mock the ImportValue and split functions for testing
     const originalImportValue = cdk.Fn.importValue;
@@ -34,6 +51,15 @@ describe('SlackAiAgentDemoStack', () => {
         return ['subnet-1234', 'subnet-5678'];
       }
       return originalSplit(delimiter, value);
+    });
+    
+    cdk.Fn.select = jest.fn().mockImplementation((index: number, array: any) => {
+      if (Array.isArray(array) && array.length > index) {
+        return array[index];
+      }
+      if (index === 0) return 'subnet-1234';
+      if (index === 1) return 'subnet-5678';
+      return `subnet-${index}`;
     });
     
     stack = new SlackAiAgentDemoStack(app, 'TestSlackAiAgentDemoStack', {
