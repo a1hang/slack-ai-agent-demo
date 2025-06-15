@@ -8,24 +8,7 @@ describe('SlackAiAgentDemoStack', () => {
   let template: Template;
 
   beforeEach(() => {
-    app = new cdk.App({
-      context: {
-        'vpc-provider:account=123456789012:filter.vpc-id=vpc-12345678:region=ap-northeast-1:returnAsymmetricSubnets=true': {
-          vpcId: 'vpc-12345678',
-          availabilityZones: ['ap-northeast-1a', 'ap-northeast-1c'],
-          subnetGroups: [
-            {
-              name: 'Private',
-              type: 'Private',
-              subnets: [
-                { subnetId: 'subnet-1234', availabilityZone: 'ap-northeast-1a' },
-                { subnetId: 'subnet-5678', availabilityZone: 'ap-northeast-1c' }
-              ]
-            }
-          ]
-        }
-      }
-    });
+    app = new cdk.App();
     
     // Mock the ImportValue and split functions for testing
     const originalImportValue = cdk.Fn.importValue;

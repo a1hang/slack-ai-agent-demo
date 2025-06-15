@@ -12,15 +12,16 @@ export class SlackAiAgentDemoStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
 
-    // Import existing VPC and components from infrastructure stacks
+    // Import existing components from infrastructure stacks
     const vpcId = Fn.importValue('slack-ai-agent-demo-base-VpcId');
     const privateSubnetIds = Fn.split(',', Fn.importValue('slack-ai-agent-demo-base-PrivateSubnets'));
     const lambdaSecurityGroupId = Fn.importValue('slack-ai-agent-demo-base-LambdaSecurityGroup');
     const lambdaRoleArn = Fn.importValue('slack-ai-agent-demo-application-LambdaRole');
 
-    // VPC reference - Import without subnet validation
-    const vpc = ec2.Vpc.fromLookup(this, 'ExistingVpc', {
+    // VPC reference using fromVpcAttributes without subnet validation
+    const vpc = ec2.Vpc.fromVpcAttributes(this, 'ExistingVpc', {
       vpcId: vpcId,
+      availabilityZones: ['ap-northeast-1a', 'ap-northeast-1c'],
     });
 
     // Manual subnet import
