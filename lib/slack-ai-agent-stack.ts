@@ -65,7 +65,7 @@ export class SlackAiAgentDemoStack extends cdk.Stack {
       timeout: cdk.Duration.seconds(60),
       memorySize: 512,
       bundling: {
-        externalModules: [],
+        externalModules: ['@aws-sdk/*'],
         forceDockerBundling: false,
       },
       environment: {
