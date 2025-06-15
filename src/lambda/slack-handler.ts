@@ -4,15 +4,23 @@ import { WebClient } from '@slack/web-api';
 import { S3Client, ListObjectsV2Command, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { SSMClient, GetParameterCommand } from '@aws-sdk/client-ssm';
+import { 
+  BedrockAgentRuntimeClient, 
+  RetrieveAndGenerateCommand 
+} from '@aws-sdk/client-bedrock-agent-runtime';
+import { DynamoDBClient, PutItemCommand, ConditionalCheckFailedException } from '@aws-sdk/client-dynamodb';
 
 const ssmClient = new SSMClient({ region: 'ap-northeast-1' });
 const s3Client = new S3Client({ region: 'ap-northeast-1' });
+const bedrockClient = new BedrockAgentRuntimeClient({ region: 'ap-northeast-1' });
+const dynamodbClient = new DynamoDBClient({ region: 'ap-northeast-1' });
 
 // Cache for SSM parameters to avoid repeated API calls
 let slackConfig: {
   botToken: string;
   signingSecret: string;
   s3Bucket: string;
+  knowledgeBaseId: string;
 } | null = null;
 
 async function getSlackConfig() {
@@ -21,7 +29,7 @@ async function getSlackConfig() {
   }
 
   try {
-    const [botToken, signingSecret, s3Bucket] = await Promise.all([
+    const [botToken, signingSecret, s3Bucket, knowledgeBaseId] = await Promise.all([
       ssmClient.send(new GetParameterCommand({
         Name: '/slack-ai-agent/bot-token',
         WithDecryption: true,
@@ -33,18 +41,44 @@ async function getSlackConfig() {
       ssmClient.send(new GetParameterCommand({
         Name: '/slack-ai-agent/s3-bucket',
       })),
+      ssmClient.send(new GetParameterCommand({
+        Name: '/slack-ai-agent/knowledge-base-id',
+      })),
     ]);
 
     slackConfig = {
       botToken: botToken.Parameter?.Value || '',
       signingSecret: signingSecret.Parameter?.Value || '',
       s3Bucket: s3Bucket.Parameter?.Value || '',
+      knowledgeBaseId: knowledgeBaseId.Parameter?.Value || '',
     };
 
     return slackConfig;
   } catch (error) {
     console.error('Failed to get SSM parameters:', error);
     throw new Error('Configuration error');
+  }
+}
+
+async function checkDuplicateEvent(eventKey: string): Promise<boolean> {
+  const ttl = Math.floor(Date.now() / 1000) + 300; // 5分後にTTL
+  
+  try {
+    await dynamodbClient.send(new PutItemCommand({
+      TableName: 'slack-ai-agent-event-deduplication',
+      Item: {
+        eventKey: { S: eventKey },
+        ttl: { N: ttl.toString() },
+        timestamp: { S: new Date().toISOString() }
+      },
+      ConditionExpression: 'attribute_not_exists(eventKey)'
+    }));
+    return false; // 新しいイベント
+  } catch (error) {
+    if (error instanceof ConditionalCheckFailedException) {
+      return true; // 重複イベント
+    }
+    throw error;
   }
 }
 
@@ -73,6 +107,14 @@ async function getApp() {
 
   // Register app_mention event handler (replaces message handlers)
   app.event('app_mention', async ({ event, say, client }) => {
+    const eventKey = `${event.channel}-${event.ts}-${event.user}`;
+    
+    // 重複チェック
+    if (await checkDuplicateEvent(eventKey)) {
+      console.log(`Duplicate event detected, skipping: ${eventKey}`);
+      return;
+    }
+    
     const text = event.text.toLowerCase();
     const threadTs = event.thread_ts || event.ts;
 
@@ -89,15 +131,52 @@ async function getApp() {
         const objectKey = match[1].trim();
         await handleS3Url(event, say, client, threadTs, objectKey);
       }
+    } else if (text.includes('ask ')) {
+      const query = event.text.match(/ask (.+)/i)?.[1];
+      if (!query) {
+        await say({
+          text: "質問を入力してください。例: @Slack AI Agent ask プロジェクト管理のベストプラクティスは？",
+          thread_ts: threadTs,
+        });
+        return;
+      }
+      await handleAskCommand(event, say, client, threadTs, query);
     } else {
       await say({
-        text: '👋 こんにちは！利用可能なコマンド:\n• `@Slack AI Agent hello` - 挨拶\n• `@Slack AI Agent list-s3` - S3ファイル一覧\n• `@Slack AI Agent s3-url <ファイル名>` - ダウンロードURL生成',
+        text: '👋 こんにちは！利用可能なコマンド:\n• `@Slack AI Agent hello` - 挨拶\n• `@Slack AI Agent list-s3` - S3ファイル一覧\n• `@Slack AI Agent s3-url <ファイル名>` - ダウンロードURL生成\n• `@Slack AI Agent ask <質問>` - AI問答',
         thread_ts: threadTs,
       });
     }
   });
 
   return { app, awsLambdaReceiver, webClient };
+}
+
+// Bedrock Knowledge Base search function
+async function searchWithBedrockKB(
+  query: string, 
+  knowledgeBaseId: string
+): Promise<any> {
+  try {
+    const command = new RetrieveAndGenerateCommand({
+      input: {
+        text: query
+      },
+      retrieveAndGenerateConfiguration: {
+        type: "KNOWLEDGE_BASE",
+        knowledgeBaseConfiguration: {
+          knowledgeBaseId: knowledgeBaseId,
+          modelArn: "arn:aws:bedrock:ap-northeast-1::foundation-model/anthropic.claude-3-haiku-20240307-v1:0"
+        }
+      }
+    });
+    
+    const response = await bedrockClient.send(command);
+    return response;
+  } catch (error) {
+    console.error('Bedrock Knowledge Base Error:', error);
+    throw new Error('文書検索中にエラーが発生しました');
+  }
 }
 
 // S3 list objects with progress display  
@@ -222,6 +301,8 @@ async function handleS3Url(event: any, say: any, client: any, threadTs: string, 
     const command = new GetObjectCommand({
       Bucket: config.s3Bucket,
       Key: objectKey,
+      ResponseContentType: 'text/plain; charset=utf-8',
+      ResponseContentDisposition: `attachment; filename*=UTF-8''${encodeURIComponent(objectKey)}`
     });
     
     const signedUrl = await getSignedUrl(s3Client, command, { expiresIn: 900 }); // 15 minutes
@@ -267,6 +348,60 @@ async function handleS3Url(event: any, say: any, client: any, threadTs: string, 
         text: { 
           type: "mrkdwn", 
           text: `❌ ファイル \`${objectKey}\` のダウンロードURL生成中にエラーが発生しました。ファイル名を確認してください。` 
+        }
+      }]
+    });
+  }
+}
+
+// Ask command handler with Bedrock Knowledge Base
+async function handleAskCommand(event: any, say: any, client: any, threadTs: string, query: string) {
+  // Step 1: Show search progress
+  const progressMsg = await say({
+    text: "🔍 Bedrock Knowledge Baseで検索中...",
+    thread_ts: threadTs,
+  });
+
+  try {
+    const config = await getSlackConfig();
+    
+    // Step 2: Bedrock Knowledge Base search and generation
+    const response = await searchWithBedrockKB(query, config.knowledgeBaseId);
+    
+    // Step 3: Update with final answer
+    await client.chat.update({
+      channel: event.channel,
+      ts: progressMsg.ts,
+      text: "✅ 回答完了",
+      blocks: [
+        {
+          type: "section",
+          text: {
+            type: "mrkdwn",
+            text: `*質問*: ${query}\n\n*回答*:\n${response.output?.text || '回答を生成できませんでした。'}`
+          }
+        },
+        {
+          type: "context",
+          elements: [{
+            type: "mrkdwn",
+            text: `📚 AWS Bedrock Knowledge Base (Aurora Serverless v2)`
+          }]
+        }
+      ]
+    });
+    
+  } catch (error) {
+    console.error('Ask command error:', error);
+    await client.chat.update({
+      channel: event.channel,
+      ts: progressMsg.ts,
+      text: "❌ 回答生成中にエラーが発生しました",
+      blocks: [{
+        type: "section",
+        text: {
+          type: "mrkdwn",
+          text: `エラー: ${(error as Error).message}`
         }
       }]
     });

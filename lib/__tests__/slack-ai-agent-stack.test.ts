@@ -9,6 +9,42 @@ describe('SlackAiAgentDemoStack', () => {
 
   beforeEach(() => {
     app = new cdk.App();
+    
+    // Mock the ImportValue and split functions for testing
+    const originalImportValue = cdk.Fn.importValue;
+    const originalSplit = cdk.Fn.split;
+    
+    cdk.Fn.importValue = jest.fn().mockImplementation((name: string) => {
+      switch (name) {
+        case 'slack-ai-agent-demo-base-VpcId':
+          return 'vpc-12345678';
+        case 'slack-ai-agent-demo-base-PrivateSubnets':
+          return 'subnet-1234,subnet-5678';
+        case 'slack-ai-agent-demo-base-LambdaSecurityGroup':
+          return 'sg-12345678';
+        case 'slack-ai-agent-demo-application-LambdaRole':
+          return 'arn:aws:iam::123456789012:role/BedrockLambdaRole';
+        default:
+          return originalImportValue(name);
+      }
+    });
+    
+    cdk.Fn.split = jest.fn().mockImplementation((delimiter: string, value: string) => {
+      if (delimiter === ',' && value === 'subnet-1234,subnet-5678') {
+        return ['subnet-1234', 'subnet-5678'];
+      }
+      return originalSplit(delimiter, value);
+    });
+    
+    cdk.Fn.select = jest.fn().mockImplementation((index: number, array: any) => {
+      if (Array.isArray(array) && array.length > index) {
+        return array[index];
+      }
+      if (index === 0) return 'subnet-1234';
+      if (index === 1) return 'subnet-5678';
+      return `subnet-${index}`;
+    });
+    
     stack = new SlackAiAgentDemoStack(app, 'TestSlackAiAgentDemoStack', {
       env: {
         account: '123456789012',
@@ -22,7 +58,8 @@ describe('SlackAiAgentDemoStack', () => {
     template.hasResourceProperties('AWS::Lambda::Function', {
       Runtime: 'nodejs22.x',
       Handler: 'index.handler', // NodejsFunction automatically sets this
-      Timeout: 30,
+      Timeout: 60,
+      MemorySize: 512,
       FunctionName: 'slack-ai-agent-demo-handler',
     });
   });
@@ -57,64 +94,53 @@ describe('SlackAiAgentDemoStack', () => {
     });
   });
 
-  it('should create IAM role with necessary permissions', () => {
-    template.hasResourceProperties('AWS::IAM::Role', {
-      AssumeRolePolicyDocument: {
-        Statement: [
-          {
-            Effect: 'Allow',
-            Principal: {
-              Service: 'lambda.amazonaws.com',
-            },
-            Action: 'sts:AssumeRole',
-          },
-        ],
-      },
+  it('should only create CloudWatch role for API Gateway', () => {
+    // Should have one IAM Role for API Gateway CloudWatch logs
+    const roles = template.findResources('AWS::IAM::Role');
+    expect(Object.keys(roles)).toHaveLength(1);
+    expect(Object.keys(roles)[0]).toContain('CloudWatchRole');
+    
+    // Should have one IAM Policy for DynamoDB permissions
+    const policies = template.findResources('AWS::IAM::Policy');
+    expect(Object.keys(policies)).toHaveLength(1);
+    expect(Object.keys(policies)[0]).toContain('ExistingLambdaRolePolicy');
+  });
+
+  it('should not have VPC configuration (removed for Slack timeout)', () => {
+    const lambdaFunctions = template.findResources('AWS::Lambda::Function');
+    const functionKeys = Object.keys(lambdaFunctions);
+    
+    // Find the SlackHandler function
+    const slackHandlerKey = functionKeys.find(key => 
+      lambdaFunctions[key].Properties.FunctionName === 'slack-ai-agent-demo-handler'
+    );
+    
+    expect(slackHandlerKey).toBeDefined();
+    expect(lambdaFunctions[slackHandlerKey!].Properties.VpcConfig).toBeUndefined();
+  });
+
+  it('should use existing IAM role from infrastructure stack', () => {
+    template.hasResourceProperties('AWS::Lambda::Function', {
+      Role: 'arn:aws:iam::123456789012:role/BedrockLambdaRole',
     });
   });
 
-  it('should attach basic Lambda execution policy', () => {
-    template.hasResourceProperties('AWS::IAM::Role', {
-      ManagedPolicyArns: [
-        {
-          'Fn::Join': [
-            '',
-            [
-              'arn:',
-              { Ref: 'AWS::Partition' },
-              ':iam::aws:policy/service-role/AWSLambdaBasicExecutionRole',
-            ],
-          ],
-        },
-      ],
-    });
-  });
-
-  it('should have S3 permissions for demo bucket', () => {
-    template.hasResourceProperties('AWS::IAM::Policy', {
-      PolicyDocument: {
-        Statement: Match.arrayWith([
-          {
-            Effect: 'Allow',
-            Action: ['s3:ListBucket', 's3:GetObjectAttributes', 's3:GetObject'],
-            Resource: ['arn:aws:s3:::*', 'arn:aws:s3:::*/*'],
-          },
-        ]),
+  it('should create DynamoDB table for event deduplication', () => {
+    template.hasResourceProperties('AWS::DynamoDB::Table', {
+      TableName: 'slack-ai-agent-event-deduplication',
+      BillingMode: 'PAY_PER_REQUEST',
+      TimeToLiveSpecification: {
+        AttributeName: 'ttl',
+        Enabled: true,
       },
-    });
-  });
-
-  it('should have SSM Parameter Store read permissions', () => {
-    template.hasResourceProperties('AWS::IAM::Policy', {
-      PolicyDocument: {
-        Statement: Match.arrayWith([
-          {
-            Effect: 'Allow',
-            Action: ['ssm:GetParameter', 'ssm:GetParameters'],
-            Resource: 'arn:aws:ssm:ap-northeast-1:123456789012:parameter/slack-ai-agent/*',
-          },
-        ]),
-      },
+      AttributeDefinitions: [{
+        AttributeName: 'eventKey',
+        AttributeType: 'S',
+      }],
+      KeySchema: [{
+        AttributeName: 'eventKey',
+        KeyType: 'HASH',
+      }],
     });
   });
 });
