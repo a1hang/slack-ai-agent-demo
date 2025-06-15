@@ -14,7 +14,7 @@ export class SlackAiAgentDemoStack extends cdk.Stack {
 
     // Import existing VPC and components from infrastructure stacks
     const vpcId = Fn.importValue('slack-ai-agent-demo-base-VpcId');
-    const privateSubnetIds = Fn.importValue('slack-ai-agent-demo-base-PrivateSubnets').split(',');
+    const privateSubnetIds = Fn.split(',', Fn.importValue('slack-ai-agent-demo-base-PrivateSubnets'));
     const lambdaSecurityGroupId = Fn.importValue('slack-ai-agent-demo-base-LambdaSecurityGroup');
     const lambdaRoleArn = Fn.importValue('slack-ai-agent-demo-application-LambdaRole');
 

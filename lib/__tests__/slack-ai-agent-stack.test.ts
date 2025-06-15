@@ -10,8 +10,10 @@ describe('SlackAiAgentDemoStack', () => {
   beforeEach(() => {
     app = new cdk.App();
     
-    // Mock the ImportValue functions for testing
+    // Mock the ImportValue and split functions for testing
     const originalImportValue = cdk.Fn.importValue;
+    const originalSplit = cdk.Fn.split;
+    
     cdk.Fn.importValue = jest.fn().mockImplementation((name: string) => {
       switch (name) {
         case 'slack-ai-agent-demo-base-VpcId':
@@ -25,6 +27,13 @@ describe('SlackAiAgentDemoStack', () => {
         default:
           return originalImportValue(name);
       }
+    });
+    
+    cdk.Fn.split = jest.fn().mockImplementation((delimiter: string, value: string) => {
+      if (delimiter === ',' && value === 'subnet-1234,subnet-5678') {
+        return ['subnet-1234', 'subnet-5678'];
+      }
+      return originalSplit(delimiter, value);
     });
     
     stack = new SlackAiAgentDemoStack(app, 'TestSlackAiAgentDemoStack', {
