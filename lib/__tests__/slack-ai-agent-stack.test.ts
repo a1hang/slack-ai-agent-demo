@@ -100,23 +100,47 @@ describe('SlackAiAgentDemoStack', () => {
     expect(Object.keys(roles)).toHaveLength(1);
     expect(Object.keys(roles)[0]).toContain('CloudWatchRole');
     
-    // Should not have IAM Policy creation since permissions are in existing role
+    // Should have one IAM Policy for DynamoDB permissions
     const policies = template.findResources('AWS::IAM::Policy');
-    expect(Object.keys(policies)).toHaveLength(0);
+    expect(Object.keys(policies)).toHaveLength(1);
+    expect(Object.keys(policies)[0]).toContain('ExistingLambdaRolePolicy');
   });
 
-  it('should reference existing VPC configuration', () => {
-    template.hasResourceProperties('AWS::Lambda::Function', {
-      VpcConfig: {
-        SecurityGroupIds: ['sg-12345678'],
-        SubnetIds: ['subnet-1234', 'subnet-5678'],
-      },
-    });
+  it('should not have VPC configuration (removed for Slack timeout)', () => {
+    const lambdaFunctions = template.findResources('AWS::Lambda::Function');
+    const functionKeys = Object.keys(lambdaFunctions);
+    
+    // Find the SlackHandler function
+    const slackHandlerKey = functionKeys.find(key => 
+      lambdaFunctions[key].Properties.FunctionName === 'slack-ai-agent-demo-handler'
+    );
+    
+    expect(slackHandlerKey).toBeDefined();
+    expect(lambdaFunctions[slackHandlerKey!].Properties.VpcConfig).toBeUndefined();
   });
 
   it('should use existing IAM role from infrastructure stack', () => {
     template.hasResourceProperties('AWS::Lambda::Function', {
       Role: 'arn:aws:iam::123456789012:role/BedrockLambdaRole',
+    });
+  });
+
+  it('should create DynamoDB table for event deduplication', () => {
+    template.hasResourceProperties('AWS::DynamoDB::Table', {
+      TableName: 'slack-ai-agent-event-deduplication',
+      BillingMode: 'PAY_PER_REQUEST',
+      TimeToLiveSpecification: {
+        AttributeName: 'ttl',
+        Enabled: true,
+      },
+      AttributeDefinitions: [{
+        AttributeName: 'eventKey',
+        AttributeType: 'S',
+      }],
+      KeySchema: [{
+        AttributeName: 'eventKey',
+        KeyType: 'HASH',
+      }],
     });
   });
 });

@@ -4,6 +4,7 @@ import * as nodejs from 'aws-cdk-lib/aws-lambda-nodejs';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
+import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import { Construct } from 'constructs';
 import { Fn } from 'aws-cdk-lib';
 import * as path from 'path';
@@ -44,6 +45,18 @@ export class SlackAiAgentDemoStack extends cdk.Stack {
 
     // Note: S3, SSM, and Bedrock permissions are already included in the existing role from infrastructure stack
 
+    // DynamoDB table for event deduplication
+    const deduplicationTable = new dynamodb.Table(this, 'EventDeduplicationTable', {
+      tableName: 'slack-ai-agent-event-deduplication',
+      partitionKey: { name: 'eventKey', type: dynamodb.AttributeType.STRING },
+      timeToLiveAttribute: 'ttl',
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
+
+    // Grant DynamoDB permissions to Lambda role
+    deduplicationTable.grantReadWriteData(lambdaRole);
+
     // Lambda function with VPC placement
     const lambdaFunction = new nodejs.NodejsFunction(this, 'SlackHandlerFunction', {
       entry: path.join(__dirname, '../src/lambda/slack-handler.ts'),
@@ -59,11 +72,12 @@ export class SlackAiAgentDemoStack extends cdk.Stack {
         NODE_ENV: 'production',
       },
       role: lambdaRole,
-      vpc: vpc,
-      vpcSubnets: {
-        subnets: [privateSubnet1, privateSubnet2],
-      },
-      securityGroups: [lambdaSecurityGroup],
+      // VPC configuration removed for faster cold start (Slack 3-second timeout requirement)
+      // vpc: vpc,
+      // vpcSubnets: {
+      //   subnets: [privateSubnet1, privateSubnet2],
+      // },
+      // securityGroups: [lambdaSecurityGroup],
     });
 
     const api = new apigateway.RestApi(this, 'SlackAiAgentApi', {

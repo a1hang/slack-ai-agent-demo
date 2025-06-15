@@ -8,10 +8,12 @@ import {
   BedrockAgentRuntimeClient, 
   RetrieveAndGenerateCommand 
 } from '@aws-sdk/client-bedrock-agent-runtime';
+import { DynamoDBClient, PutItemCommand, ConditionalCheckFailedException } from '@aws-sdk/client-dynamodb';
 
 const ssmClient = new SSMClient({ region: 'ap-northeast-1' });
 const s3Client = new S3Client({ region: 'ap-northeast-1' });
 const bedrockClient = new BedrockAgentRuntimeClient({ region: 'ap-northeast-1' });
+const dynamodbClient = new DynamoDBClient({ region: 'ap-northeast-1' });
 
 // Cache for SSM parameters to avoid repeated API calls
 let slackConfig: {
@@ -58,6 +60,28 @@ async function getSlackConfig() {
   }
 }
 
+async function checkDuplicateEvent(eventKey: string): Promise<boolean> {
+  const ttl = Math.floor(Date.now() / 1000) + 300; // 5分後にTTL
+  
+  try {
+    await dynamodbClient.send(new PutItemCommand({
+      TableName: 'slack-ai-agent-event-deduplication',
+      Item: {
+        eventKey: { S: eventKey },
+        ttl: { N: ttl.toString() },
+        timestamp: { S: new Date().toISOString() }
+      },
+      ConditionExpression: 'attribute_not_exists(eventKey)'
+    }));
+    return false; // 新しいイベント
+  } catch (error) {
+    if (error instanceof ConditionalCheckFailedException) {
+      return true; // 重複イベント
+    }
+    throw error;
+  }
+}
+
 let app: App | null = null;
 let awsLambdaReceiver: AwsLambdaReceiver | null = null;
 let webClient: WebClient | null = null;
@@ -83,6 +107,14 @@ async function getApp() {
 
   // Register app_mention event handler (replaces message handlers)
   app.event('app_mention', async ({ event, say, client }) => {
+    const eventKey = `${event.channel}-${event.ts}-${event.user}`;
+    
+    // 重複チェック
+    if (await checkDuplicateEvent(eventKey)) {
+      console.log(`Duplicate event detected, skipping: ${eventKey}`);
+      return;
+    }
+    
     const text = event.text.toLowerCase();
     const threadTs = event.thread_ts || event.ts;
 
@@ -269,6 +301,8 @@ async function handleS3Url(event: any, say: any, client: any, threadTs: string, 
     const command = new GetObjectCommand({
       Bucket: config.s3Bucket,
       Key: objectKey,
+      ResponseContentType: 'text/plain; charset=utf-8',
+      ResponseContentDisposition: `attachment; filename*=UTF-8''${encodeURIComponent(objectKey)}`
     });
     
     const signedUrl = await getSignedUrl(s3Client, command, { expiresIn: 900 }); // 15 minutes
