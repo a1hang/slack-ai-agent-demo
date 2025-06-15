@@ -134,7 +134,7 @@ async function searchWithBedrockKB(
         type: "KNOWLEDGE_BASE",
         knowledgeBaseConfiguration: {
           knowledgeBaseId: knowledgeBaseId,
-          modelArn: "arn:aws:bedrock:ap-northeast-1::foundation-model/anthropic.claude-3-sonnet-20240229-v1:0"
+          modelArn: "arn:aws:bedrock:ap-northeast-1::foundation-model/anthropic.claude-3-haiku-20240307-v1:0"
         }
       }
     });

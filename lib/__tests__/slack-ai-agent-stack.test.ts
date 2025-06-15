@@ -14,13 +14,13 @@ describe('SlackAiAgentDemoStack', () => {
     const originalImportValue = cdk.Fn.importValue;
     cdk.Fn.importValue = jest.fn().mockImplementation((name: string) => {
       switch (name) {
-        case 'slack-ai-agent-demo-bedrock-kb-VpcId':
+        case 'slack-ai-agent-demo-base-VpcId':
           return 'vpc-12345678';
-        case 'slack-ai-agent-demo-bedrock-kb-PrivateSubnets':
+        case 'slack-ai-agent-demo-base-PrivateSubnets':
           return 'subnet-1234,subnet-5678';
-        case 'slack-ai-agent-demo-bedrock-kb-LambdaSecurityGroup':
+        case 'slack-ai-agent-demo-base-LambdaSecurityGroup':
           return 'sg-12345678';
-        case 'slack-ai-agent-demo-bedrock-kb-LambdaRole':
+        case 'slack-ai-agent-demo-application-LambdaRole':
           return 'arn:aws:iam::123456789012:role/BedrockLambdaRole';
         default:
           return originalImportValue(name);
